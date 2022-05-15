@@ -1,0 +1,155 @@
+-- Sakshi Abhyankar
+-- Assignment: Create Fact Tables and Load Data
+-- Date: May 14, 2022
+-- IMT 577 Class Project 
+
+-- Creating Fact Source Sales Target Table
+CREATE OR REPLACE TABLE Fact_SRCSalesTarget(
+     DimStoreID INT CONSTRAINT FK_DimStoreID FOREIGN KEY REFERENCES Dim_Store(DimStoreID) --Foreign Key
+    ,DimResellerID INT CONSTRAINT FK_DimResellerID FOREIGN KEY REFERENCES Dim_Reseller(DimResellerID) --Foreign Key
+    ,DimChannelID INT CONSTRAINT FK_DimChannelID FOREIGN KEY REFERENCES Dim_Channel(DimChannelID) --Foreign Key
+    ,DimTargetDateID NUMBER(9,0) CONSTRAINT FK_DimTargetDateID FOREIGN KEY REFERENCES Dim_Date(DATE_PKEY) --Foreign Key
+    ,SalesTargetAmount INT
+);
+
+INSERT INTO Fact_SRCSalesTarget(
+
+     DimStoreID 
+    ,DimResellerID
+    ,DimChannelID
+    ,DimTargetDateID
+    ,SalesTargetAmount
+)
+
+SELECT DISTINCT
+    
+     NVL(DimStoreId,-1)AS DimStoreID 
+    ,NVL(DimResellerID,-1)AS DimResellerID
+    ,NVL(DimChannelID,-1) DimChannelID
+    ,Dim_Date.DATE_PKEY
+    ,TargetSalesAmount AS SalesTargetAmount
+    
+FROM Target_Data_Table
+          
+INNER JOIN Dim_Channel ON
+     Dim_Channel.ChannelName = CASE WHEN Target_Data_Table.ChannelName = 'Online' THEN 'On-line' ELSE Target_Data_Table.ChannelName END
+    
+LEFT OUTER JOIN Dim_Reseller ON 
+     Dim_Reseller.ResellerName = Target_Data_Table.TargetName
+          
+LEFT OUTER JOIN Dim_Date ON 
+     Dim_Date.Year = Target_Data_Table.Year
+    
+LEFT OUTER JOIN Dim_Store ON
+     Dim_Store.StoreNumber = CASE 
+                                WHEN Target_Data_Table.TargetName = 'Store Number 5' then 5
+                                WHEN Target_Data_Table.TargetName = 'Store Number 8' then 8
+                                WHEN Target_Data_Table.TargetName = 'Store Number 10' then 10
+                                WHEN Target_Data_Table.TargetName = 'Store Number 21' then 21
+                                WHEN Target_Data_Table.TargetName = 'Store Number 34' then 34
+                                WHEN Target_Data_Table.TargetName = 'Store Number 39' then 39 
+                                ELSE -1
+                                END = -1
+;
+
+-- SELECT * FROM Fact_SRCSalesTarget
+
+-- Creating Fact Product Sales Target Table
+CREATE OR REPLACE TABLE Fact_ProductSalesTarget( 
+     DimProductID INT CONSTRAINT FK_DimProductID FOREIGN KEY REFERENCES Dim_Product(DimProductID) --Foreign Key
+    ,DimTargetDateID NUMBER(9,0) CONSTRAINT FK_DimTargetDateID FOREIGN KEY REFERENCES Dim_Date(DATE_PKEY) --Foreign Key
+    ,ProductTargetSalesQuantity INT
+);
+
+INSERT INTO Fact_ProductSalesTarget(
+    DimProductID, 
+    DimTargetDateID, 
+    ProductTargetSalesQuantity
+)  
+
+SELECT DISTINCT
+     NVL(DimProductID,-1) AS DimProductID,
+     Dim_Date.DATE_PKEY,
+     SalesQuantityTarget AS ProductTargetSalesQuantity
+    
+FROM Target_Data_Product tdp   
+INNER JOIN Dim_Product ON  
+     tdp.ProductID = Dim_Product.ProductID 
+INNER JOIN Dim_Date ON 
+     Dim_Date.Year = tdp.Year
+         
+-- SELECT * FROM Fact_ProductSalesTarget
+
+-- Creating Fact Actual Sales Table
+CREATE OR REPLACE TABLE Fact_SalesActual( 
+     DimProductID INT CONSTRAINT FK_DimProductID FOREIGN KEY REFERENCES Dim_Product(DimProductID) --Foreign Key
+    ,DimStoreID INT CONSTRAINT FK_DimStoreID FOREIGN KEY REFERENCES Dim_Store(DimStoreID) --Foreign Key
+    ,DimResellerID INT CONSTRAINT FK_DimResellerID FOREIGN KEY REFERENCES Dim_Reseller(DimResellerID) --Foreign Key
+    ,DimCustomerID INT CONSTRAINT Fk_DimCustomerID FOREIGN KEY REFERENCES Dim_Customer(DimCustomerID) --Foreign Key
+    ,DimChannelID INT CONSTRAINT FK_DimChannelID FOREIGN KEY REFERENCES Dim_Channel(DimChannelID) --Foreign Key
+    ,DimSaleDateID NUMBER(9,0) CONSTRAINT FK_DimSaleDateID FOREIGN KEY REFERENCES Dim_Date(DATE_PKEY) --Foreign Key
+    ,DimLocationID INT CONSTRAINT FK_DimLocationID FOREIGN KEY REFERENCES Dim_Location(DimLocationID) --Foreign Key
+    ,SourceSalesHeaderID INT
+    ,SourceSalesDetailID INT
+    ,SaleAmount INT
+    ,SaleQuantity INT
+    ,SaleUnitPrice INT
+    ,SaleExtendedCost INT
+    ,SaleTotalProfit INT
+);
+
+INSERT INTO Fact_SalesActual(
+     DimProductID
+    ,DimStoreID
+    ,DimResellerID
+    ,DimCustomerID
+    ,DimChannelID
+    ,DimSaleDateID
+    ,DimLocationID
+    ,SourceSalesHeaderID
+    ,SourceSalesDetailID 
+    ,SaleAmount 
+    ,SaleQuantity 
+    ,SaleUnitPrice 
+    ,SaleExtendedCost 
+    ,SaleTotalProfit 
+)
+
+SELECT DISTINCT
+     NVL(DimProductID,-1) AS DimProductID
+    ,NVL(DimStoreID,-1) AS DimStoreID
+   	,NVL(DimResellerID,-1) AS DimResellerID
+	,NVL(DimCustomerID,-1) AS DimCustomerID
+    ,NVL(DimChannelID,-1) AS DimChannelID
+    ,Dim_Date.DATE_PKEY AS DimSaleDateID
+	,NVL(Dim_Location.DimLocationID,-1) AS DimLocationID
+	,NVL(Sales_Header.SalesHeaderID,-1) AS SalesHeaderID
+	,NVL(SalesDetailID,-1) AS SalesDetailID
+	,SalesAmount
+	,SalesQuantity
+    ,(SalesAmount/SalesQuantity) AS SaleUnitPrice
+    ,(ProductCost * SalesQuantity) AS SaleExtendedCost 
+    ,(SaleUnitPrice-ProductCost) * SalesQuantity AS SaleTotalProfit
+
+FROM Sales_Header 
+JOIN Sales_Detail ON 
+     Sales_Header.SalesHeaderID = Sales_Detail.SalesHeaderID
+LEFT OUTER JOIN Dim_Product ON 
+     Sales_Detail.ProductID = Dim_Product.ProductID
+LEFT OUTER JOIN Dim_Store ON
+     Sales_Header.StoreID = Dim_Store.StoreID
+LEFT OUTER JOIN Dim_Reseller ON 
+     Sales_Header.ResellerID = Dim_Reseller.ResellerID
+LEFT OUTER JOIN Dim_Customer ON 
+     Sales_Header.CustomerID = Dim_Customer.CustomerID
+LEFT OUTER JOIN Dim_Channel ON 
+     Sales_Header.ChannelID = Dim_Channel.ChannelID
+LEFT OUTER JOIN Dim_Date ON 
+     Dim_Date.Date = to_date(Sales_Header.date,'MM/DD/YY')
+LEFT OUTER JOIN Dim_Location ON 
+     Dim_Location.DimLocationID = Dim_Store.DimLocationID 
+ OR  Dim_Location.DimLocationID = Dim_Reseller.DimLocationID 
+ OR  Dim_Location.DimLocationID = Dim_Customer.DimLocationID;
+
+-- SELECT * FROM Fact_SalesActual
+
